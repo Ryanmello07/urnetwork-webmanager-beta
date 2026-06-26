@@ -38,7 +38,6 @@ export function isVerifiedExtension(extensionId?: string): boolean {
 }
 
 const CHROME_IDENTITY_HOST_SUFFIX = '.chromiumapp.org';
-const FIREFOX_IDENTITY_HOST_SUFFIX = '.ext.allizom.org'; // AMO dev/staging tests; production uses extensions.allizom.org or similar
 
 /**
  * Validates that the redirect_uri supplied by the extension is a browser-managed
