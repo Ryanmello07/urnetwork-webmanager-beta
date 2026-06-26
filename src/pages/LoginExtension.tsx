@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   CheckCircle,
   Shield,
@@ -21,7 +21,6 @@ const FRAMED_WARNING_ID = 'ssoi-framed-warning';
 
 const LoginExtension: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const { isAuthenticated, token } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isFramed, setIsFramed] = useState(false);
@@ -44,9 +43,9 @@ const LoginExtension: React.FC = () => {
     if (!isAuthenticated && validation.success) {
       const returnUrl = `/login-extension?${searchParams.toString()}`;
       sessionStorage.setItem(EXTENSION_RETURN_KEY, returnUrl);
-      navigate('/', { replace: true });
+      window.location.replace('/');
     }
-  }, [isAuthenticated, validation.success, searchParams, navigate]);
+  }, [isAuthenticated, validation.success, searchParams]);
 
   const openInNewTab = () => {
     window.open(window.location.href, '_blank', 'noopener,noreferrer');
@@ -75,7 +74,7 @@ const LoginExtension: React.FC = () => {
     return null;
   }
 
-  const { extension_name, extension_version, state } =
+  const { extension_name, extension_version, state, redirect_uri } =
     validation.data as ExtensionParams;
   const { isVerified } = validation;
 
@@ -110,9 +109,11 @@ const LoginExtension: React.FC = () => {
       }
 
       logExtensionAuthEvent('approve', extension_name, extension_version, isVerified);
-      navigate(
-        `/login-extension/complete#code=${encodeURIComponent(response.auth_code)}&state=${encodeURIComponent(state)}`,
-        { replace: true }
+
+      // Send the auth code directly to the browser-managed extension redirect.
+      // It never touches beta.app.ur.network after this point.
+      window.location.replace(
+        `${redirect_uri}#code=${encodeURIComponent(response.auth_code)}&state=${encodeURIComponent(state)}`
       );
     } catch {
       toast.error('Something went wrong. Please re-initiate the flow from the extension.');
@@ -122,7 +123,7 @@ const LoginExtension: React.FC = () => {
 
   const handleDeny = () => {
     logExtensionAuthEvent('deny', extension_name, extension_version, isVerified);
-    navigate('/', { replace: true });
+    window.location.replace('/');
   };
 
   return (

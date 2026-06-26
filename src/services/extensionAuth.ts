@@ -4,8 +4,9 @@ import { z } from 'zod';
  * Verified extension IDs (Chrome Web Store / Firefox Add-ons IDs).
  * Populate this list once the extensions are published.
  *
- * Until the extension provides a verified ID, the user will see an
- * "Unverified extension" warning.
+ * When the browser delivers the auth code via chrome.identity.launchWebAuthFlow,
+ * the extension ID is proven by the browser runtime, so this list becomes a
+ * allowlist for UI decoration only (e.g. "Verified extension" badge).
  */
 export const VERIFIED_EXTENSION_IDS: string[] = [];
 
@@ -14,6 +15,7 @@ export const extensionParamsSchema = z.object({
   extension_name: z.string().min(1, 'Extension name is required'),
   extension_version: z.string().min(1, 'Extension version is required'),
   state: z.string().min(8, 'State parameter must be at least 8 characters'),
+  redirect_uri: z.string().url(),
 });
 
 export type ExtensionParams = z.infer<typeof extensionParamsSchema>;
@@ -25,14 +27,40 @@ export type ExtensionValidationResult =
   | { success: false; error: string };
 
 /**
- * Checks whether an extension is considered verified.
+ * Checks whether an extension ID is on the verified allowlist.
  *
- * TODO: Accept the extension ID from the extension via URL and check it
- * against VERIFIED_EXTENSION_IDS. Until then, all extensions are treated as
- * unverified so the user sees a warning (beta, dev, and self-built builds).
+ * With chrome.identity.launchWebAuthFlow the browser has already proven that
+ * the code is going to the extension with this ID, but the allowlist lets us
+ * show a "Verified extension" badge for known official builds.
  */
 export function isVerifiedExtension(extensionId?: string): boolean {
   return Boolean(extensionId && VERIFIED_EXTENSION_IDS.includes(extensionId));
+}
+
+const CHROME_IDENTITY_HOST_SUFFIX = '.chromiumapp.org';
+const FIREFOX_IDENTITY_HOST_SUFFIX = '.ext.allizom.org'; // AMO dev/staging tests; production uses extensions.allizom.org or similar
+
+/**
+ * Validates that the redirect_uri supplied by the extension is a browser-managed
+ * identity redirect URL. This prevents a malicious extension or web page from
+ * convincing the website to send the auth code to an arbitrary location.
+ */
+export function isValidExtensionRedirectUri(redirectUri: string): boolean {
+  try {
+    const parsed = new URL(redirectUri);
+    if (parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+
+    // Chrome identity redirect: https://<extension-id>.chromiumapp.org/...
+    if (host.endsWith(CHROME_IDENTITY_HOST_SUFFIX)) return true;
+
+    // Firefox identity redirect variants
+    if (host.endsWith('.mozilla.com') || host.endsWith('.allizom.org')) return true;
+
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 export function validateExtensionParams(
@@ -43,12 +71,17 @@ export function validateExtensionParams(
     extension_name: searchParams.get('extension_name') ?? '',
     extension_version: searchParams.get('extension_version') ?? '',
     state: searchParams.get('state') ?? '',
+    redirect_uri: searchParams.get('redirect_uri') ?? '',
   };
 
   const result = extensionParamsSchema.safeParse(raw);
 
   if (!result.success) {
     return { success: false, error: result.error.issues[0]?.message ?? 'Invalid parameters' };
+  }
+
+  if (!isValidExtensionRedirectUri(result.data.redirect_uri)) {
+    return { success: false, error: 'Invalid extension redirect URI' };
   }
 
   const isVerified = isVerifiedExtension(result.data.extension_id);
