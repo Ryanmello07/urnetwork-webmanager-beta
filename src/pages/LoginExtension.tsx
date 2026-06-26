@@ -1,6 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Shield, Loader2, AlertTriangle, ExternalLink } from 'lucide-react';
+import {
+  CheckCircle,
+  Shield,
+  Loader2,
+  AlertTriangle,
+  ExternalLink,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../hooks/useAuth';
 import { createAuthCode } from '../services/api';
@@ -174,7 +180,7 @@ const LoginExtension: React.FC = () => {
             </dl>
           </div>
 
-          {!isVerified && (
+          {!isVerified ? (
             <div className="bg-yellow-600/10 border border-yellow-500/30 rounded-lg p-4">
               <div className="flex items-start space-x-3">
                 <AlertTriangle size={18} className="text-yellow-500 flex-shrink-0 mt-0.5" />
@@ -184,6 +190,18 @@ const LoginExtension: React.FC = () => {
                     This extension is not verified by URnetwork. This can happen with beta,
                     developer, or self-built extensions. Only approve if you installed it from
                     a source you trust.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-green-600/10 border border-green-500/30 rounded-lg p-4">
+              <div className="flex items-start space-x-3">
+                <CheckCircle size={18} className="text-green-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-green-200 text-sm font-medium">Verified extension</p>
+                  <p className="text-green-100/80 text-sm mt-1 leading-relaxed">
+                    This extension has been verified by URnetwork.
                   </p>
                 </div>
               </div>

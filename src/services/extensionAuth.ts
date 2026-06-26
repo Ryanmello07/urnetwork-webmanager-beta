@@ -3,17 +3,14 @@ import { z } from 'zod';
 /**
  * Verified extension IDs (Chrome Web Store / Firefox Add-ons IDs).
  * Populate this list once the extensions are published.
+ *
+ * Until the extension provides a verified ID, the user will see an
+ * "Unverified extension" warning.
  */
 export const VERIFIED_EXTENSION_IDS: string[] = [];
 
-/**
- * Known verified extension display names. This is a weaker signal than an
- * extension ID because any unverified extension can claim one of these names,
- * so it is only used to decide UI messaging, not whether the flow is allowed.
- */
-export const VERIFIED_EXTENSION_NAMES: string[] = ['URnetwork'];
-
 export const extensionParamsSchema = z.object({
+  extension_id: z.string().optional(),
   extension_name: z.string().min(1, 'Extension name is required'),
   extension_version: z.string().min(1, 'Extension version is required'),
   state: z.string().min(8, 'State parameter must be at least 8 characters'),
@@ -21,7 +18,7 @@ export const extensionParamsSchema = z.object({
 
 export type ExtensionParams = z.infer<typeof extensionParamsSchema>;
 
-export type VerifiedReason = 'verified-id' | 'verified-name' | 'unverified';
+export type VerifiedReason = 'verified-id' | 'unverified';
 
 export type ExtensionValidationResult =
   | { success: true; data: ExtensionParams; isVerified: boolean; verifiedReason: VerifiedReason }
@@ -30,20 +27,19 @@ export type ExtensionValidationResult =
 /**
  * Checks whether an extension is considered verified.
  *
- * TODO: Once extension IDs are available, accept the ID here and check it
- * against VERIFIED_EXTENSION_IDS. The name-based check below is only a
- * convenience signal for UI copy.
+ * TODO: Accept the extension ID from the extension via URL and check it
+ * against VERIFIED_EXTENSION_IDS. Until then, all extensions are treated as
+ * unverified so the user sees a warning (beta, dev, and self-built builds).
  */
-export function isVerifiedExtension(extensionName: string, extensionId?: string): boolean {
-  // When we have real IDs, prefer ID verification:
-  if (extensionId && VERIFIED_EXTENSION_IDS.includes(extensionId)) return true;
-  return VERIFIED_EXTENSION_NAMES.includes(extensionName);
+export function isVerifiedExtension(extensionId?: string): boolean {
+  return Boolean(extensionId && VERIFIED_EXTENSION_IDS.includes(extensionId));
 }
 
 export function validateExtensionParams(
   searchParams: URLSearchParams
 ): ExtensionValidationResult {
   const raw = {
+    extension_id: searchParams.get('extension_id') ?? undefined,
     extension_name: searchParams.get('extension_name') ?? '',
     extension_version: searchParams.get('extension_version') ?? '',
     state: searchParams.get('state') ?? '',
@@ -55,8 +51,8 @@ export function validateExtensionParams(
     return { success: false, error: result.error.issues[0]?.message ?? 'Invalid parameters' };
   }
 
-  const isVerified = isVerifiedExtension(result.data.extension_name);
-  const verifiedReason: VerifiedReason = isVerified ? 'verified-name' : 'unverified';
+  const isVerified = isVerifiedExtension(result.data.extension_id);
+  const verifiedReason: VerifiedReason = isVerified ? 'verified-id' : 'unverified';
 
   return { success: true, data: result.data, isVerified, verifiedReason };
 }
