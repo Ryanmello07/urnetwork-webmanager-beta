@@ -436,15 +436,20 @@ export interface WalletAuthChallengeRequest {
   blockchain?: "solana";
 }
 
-export interface WalletAuthChallengeResponse {
-  challenge: string;
-  timestamp: number;
-  expires_in: number;
-  message_template: string;
-  error?: {
-    message: string;
-  };
-}
+export type WalletAuthChallengeResponse =
+  | {
+      success: true;
+      challenge: string;
+      timestamp: number;
+      expires_in: number;
+      message_template: string;
+    }
+  | {
+      success: false;
+      error: {
+        message: string;
+      };
+    };
 
 /**
  * Response from wallet-based login

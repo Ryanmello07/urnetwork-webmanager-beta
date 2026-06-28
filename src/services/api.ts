@@ -236,18 +236,26 @@ export const fetchWalletChallenge = async (
     });
 
     if (!response.ok) {
-      const errorData = await response.text();
       return {
+        success: false,
         error: {
           message: `HTTP error! status: ${response.status}`,
         },
       };
     }
 
-    return await safeJsonParse<WalletAuthChallengeResponse>(response);
+    const data = await safeJsonParse<WalletAuthChallengeResponse>(response);
+    if ("success" in data) {
+      return data;
+    }
+    return {
+      success: true,
+      ...data,
+    };
   } catch (error) {
     console.error("Wallet challenge error:", error);
     return {
+      success: false,
       error: {
         message:
           error instanceof Error ? error.message : "Failed to fetch wallet challenge",

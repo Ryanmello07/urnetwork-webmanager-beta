@@ -54,7 +54,7 @@ export function useWalletLogin(): UseWalletLoginResult {
           blockchain,
         });
 
-      if (challengeResponse.error) {
+      if (!challengeResponse.success) {
         throw new Error(
           challengeResponse.error.message || "Failed to fetch wallet challenge"
         );
