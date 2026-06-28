@@ -38,6 +38,8 @@ import type {
   AuthClientRequest,
   AuthClientResponse,
   WalletAuthPayload,
+  WalletAuthChallengeRequest,
+  WalletAuthChallengeResponse,
   WalletLoginResponse,
   NetworkCreateRequest,
   NetworkCreateResponse,
@@ -214,6 +216,41 @@ export const loginWithWallet = async (
       error: {
         message:
           error instanceof Error ? error.message : "Wallet authentication failed",
+      },
+    };
+  }
+};
+
+/**
+ * Request a server-issued wallet authentication challenge.
+ * The user must sign the returned `message_template`.
+ */
+export const fetchWalletChallenge = async (
+  request: WalletAuthChallengeRequest
+): Promise<WalletAuthChallengeResponse> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/wallet-challenge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      return {
+        error: {
+          message: `HTTP error! status: ${response.status}`,
+        },
+      };
+    }
+
+    return await safeJsonParse<WalletAuthChallengeResponse>(response);
+  } catch (error) {
+    console.error("Wallet challenge error:", error);
+    return {
+      error: {
+        message:
+          error instanceof Error ? error.message : "Failed to fetch wallet challenge",
       },
     };
   }
@@ -1423,6 +1460,8 @@ export type {
   AuthClientRequest,
   AuthClientResponse,
   WalletAuthPayload,
+  WalletAuthChallengeRequest,
+  WalletAuthChallengeResponse,
   WalletLoginResponse,
   NetworkCreateRequest,
   NetworkCreateResponse,
