@@ -424,6 +424,26 @@ export interface WalletAuthPayload {
   wallet_message: string;
   wallet_signature: string;
   blockchain: "solana";
+  challenge: string;
+  timestamp: number;
+}
+
+/**
+ * Server-issued wallet authentication challenge
+ */
+export interface WalletAuthChallengeRequest {
+  wallet_address?: string;
+  blockchain?: "solana";
+}
+
+export interface WalletAuthChallengeResponse {
+  challenge: string;
+  timestamp: number;
+  expires_in: number;
+  message_template: string;
+  error?: {
+    message: string;
+  };
 }
 
 /**
