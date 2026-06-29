@@ -52,7 +52,7 @@ import type {
   ApiKeyMetadata,
 } from "./types";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE ?? "https://api.bringyour.com";
+const API_BASE_URL = import.meta.env.VITE_API_BASE ?? "http://74.50.11.113:8080";
 
 /**
  * Safely parse JSON response with fallback to text on error

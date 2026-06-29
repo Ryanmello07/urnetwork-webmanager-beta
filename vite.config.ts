@@ -11,10 +11,10 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://api.bringyour.com',
+        target: 'http://74.50.11.113:8080',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
-        secure: true
+        secure: false
       },
     },
   },
