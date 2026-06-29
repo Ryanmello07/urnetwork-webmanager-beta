@@ -15,8 +15,8 @@ Deno.serve(async (req: Request) => {
 
   try {
     const url = new URL(req.url);
-    // Supabase may or may not include the function prefix in the path; handle both.
-    const path = url.pathname.replace(/^\/functions\/v1\/api-proxy/, "") || "/";
+    // Supabase strips /functions/v1 but keeps the slug; handle both variants.
+    const path = url.pathname.replace(/^\/(functions\/v1\/)?api-proxy/, "") || "/";
     const targetUrl = `${BACKEND_BASE}${path}${url.search}`;
 
     const isBodyless = req.method === "GET" || req.method === "HEAD";
