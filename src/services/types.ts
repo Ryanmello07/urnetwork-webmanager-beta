@@ -822,6 +822,64 @@ export interface VerifyResponse {
   };
 }
 
+/** Response from generating a new seedphrase */
+export interface GenerateSeedphraseResponse {
+  seedphrase?: string;
+  error?: { message: string };
+}
+
+/** Response from regenerating an existing seedphrase */
+export interface RegenerateSeedphraseResponse {
+  seedphrase?: string;
+  error?: { message: string };
+}
+
+/** Request payload for adding an auth method */
+export interface AddAuthRequest {
+  user_auth?: string;
+  password?: string;
+  auth_jwt?: string;
+  auth_jwt_type?: string;
+  wallet_auth?: WalletAuthPayload;
+}
+
+/** Response from adding an auth method */
+export interface AddAuthResponse {
+  error?: { message: string };
+}
+
+/** Request payload for removing an auth method */
+export interface RemoveAuthRequest {
+  auth_type: string;
+}
+
+/** Response from removing an auth method */
+export interface RemoveAuthResponse {
+  error?: { message: string };
+}
+
+/** Request payload for changing the network name */
+export interface ChangeNameRequest {
+  new_name: string;
+}
+
+/** Response from changing the network name */
+export interface ChangeNameResponse {
+  network_name?: string;
+  error?: { message: string };
+}
+
+/** Request payload for claiming a network name */
+export interface ClaimNameRequest {
+  new_name: string;
+}
+
+/** Response from claiming a network name */
+export interface ClaimNameResponse {
+  network_name?: string;
+  error?: { message: string };
+}
+
 export interface CreateApiKeyArgs {
   name: string;
 }

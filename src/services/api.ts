@@ -51,6 +51,16 @@ import type {
   DeleteApiKeyResult,
   ApiKeyMetadata,
   SeedphraseLoginResponse,
+  GenerateSeedphraseResponse,
+  RegenerateSeedphraseResponse,
+  AddAuthRequest,
+  AddAuthResponse,
+  RemoveAuthRequest,
+  RemoveAuthResponse,
+  ChangeNameRequest,
+  ChangeNameResponse,
+  ClaimNameRequest,
+  ClaimNameResponse,
 } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE ?? "http://74.50.11.113:8080";
@@ -1280,6 +1290,226 @@ export const createNetwork = async (
       error: {
         message:
           error instanceof Error ? error.message : "Failed to create account",
+      },
+    };
+  }
+};
+
+/**
+ * Generate a new seedphrase for the authenticated user
+ */
+export const generateSeedphrase = async (
+  token: string
+): Promise<GenerateSeedphraseResponse> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/generate-seedphrase`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error("Generate seedphrase error response:", errorData);
+      return {
+        error: { message: `HTTP error! status: ${response.status}` },
+      };
+    }
+
+    return await safeJsonParse<GenerateSeedphraseResponse>(response);
+  } catch (error) {
+    console.error("Generate seedphrase error:", error);
+    return {
+      error: {
+        message:
+          error instanceof Error ? error.message : "Failed to generate seedphrase",
+      },
+    };
+  }
+};
+
+/**
+ * Regenerate (replace) an existing seedphrase
+ */
+export const regenerateSeedphrase = async (
+  token: string
+): Promise<RegenerateSeedphraseResponse> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/regenerate-seedphrase`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error("Regenerate seedphrase error response:", errorData);
+      return {
+        error: { message: `HTTP error! status: ${response.status}` },
+      };
+    }
+
+    return await safeJsonParse<RegenerateSeedphraseResponse>(response);
+  } catch (error) {
+    console.error("Regenerate seedphrase error:", error);
+    return {
+      error: {
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to regenerate seedphrase",
+      },
+    };
+  }
+};
+
+/**
+ * Add an authentication method (email+password, wallet, etc.)
+ */
+export const addAuth = async (
+  token: string,
+  args: AddAuthRequest
+): Promise<AddAuthResponse> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/add-auth`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(args),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error("Add auth error response:", errorData);
+      return {
+        error: { message: `HTTP error! status: ${response.status}` },
+      };
+    }
+
+    return await safeJsonParse<AddAuthResponse>(response);
+  } catch (error) {
+    console.error("Add auth error:", error);
+    return {
+      error: {
+        message:
+          error instanceof Error ? error.message : "Failed to add auth method",
+      },
+    };
+  }
+};
+
+/**
+ * Remove an authentication method by type
+ */
+export const removeAuth = async (
+  token: string,
+  args: RemoveAuthRequest
+): Promise<RemoveAuthResponse> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/remove-auth`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(args),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error("Remove auth error response:", errorData);
+      return {
+        error: { message: `HTTP error! status: ${response.status}` },
+      };
+    }
+
+    return await safeJsonParse<RemoveAuthResponse>(response);
+  } catch (error) {
+    console.error("Remove auth error:", error);
+    return {
+      error: {
+        message:
+          error instanceof Error ? error.message : "Failed to remove auth method",
+      },
+    };
+  }
+};
+
+/**
+ * Change the network name
+ */
+export const changeNetworkName = async (
+  token: string,
+  args: ChangeNameRequest
+): Promise<ChangeNameResponse> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/change-name`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(args),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error("Change name error response:", errorData);
+      return {
+        error: { message: `HTTP error! status: ${response.status}` },
+      };
+    }
+
+    return await safeJsonParse<ChangeNameResponse>(response);
+  } catch (error) {
+    console.error("Change name error:", error);
+    return {
+      error: {
+        message:
+          error instanceof Error ? error.message : "Failed to change network name",
+      },
+    };
+  }
+};
+
+/**
+ * Claim a network name (for seedphrase users who haven't set one yet)
+ */
+export const claimNetworkName = async (
+  token: string,
+  args: ClaimNameRequest
+): Promise<ClaimNameResponse> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/claim-name`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(args),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error("Claim name error response:", errorData);
+      return {
+        error: { message: `HTTP error! status: ${response.status}` },
+      };
+    }
+
+    return await safeJsonParse<ClaimNameResponse>(response);
+  } catch (error) {
+    console.error("Claim name error:", error);
+    return {
+      error: {
+        message:
+          error instanceof Error ? error.message : "Failed to claim network name",
       },
     };
   }

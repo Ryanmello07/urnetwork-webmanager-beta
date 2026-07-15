@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Key, Copy, Clock, Users, AlertCircle, CheckCircle, Shield, Lock, CreditCard, ExternalLink, Server, ChevronDown, ChevronUp, MapPin, Wifi, Eye, EyeOff, Network, Download, Smartphone, Trash2, ArrowRight } from 'lucide-react';
+import { Settings, Key, KeyRound, Copy, Clock, Users, AlertCircle, CheckCircle, Shield, Lock, CreditCard, ExternalLink, Server, ChevronDown, ChevronUp, MapPin, Wifi, Eye, EyeOff, Network, Download, Smartphone, Trash2, ArrowRight, FileKey, Zap, Plus, X, Edit3, Mail } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { createAuthCode, fetchNetworkUser, createAuthClient } from '../services/api';
-import type { CreateAuthCodeResponse, AuthClientResponse } from '../services/api';
+import { createAuthCode, fetchNetworkUser, createAuthClient, generateSeedphrase, regenerateSeedphrase, addAuth, removeAuth, claimNetworkName, changeNetworkName } from '../services/api';
+import type { CreateAuthCodeResponse, AuthClientResponse, NetworkUserResponse } from '../services/api';
 import type { Location } from '../services/types';
 import toast from 'react-hot-toast';
 import PasswordResetModal from './PasswordResetModal';
@@ -63,6 +63,32 @@ const AccountSettingsSection: React.FC = () => {
 
   const hasAdvancedLocation = !!(locationClientId || locationId || locationGroupId || bestAvailable || locationName || locationType);
 
+  // Seedphrase management state
+  const [generatedSeedphrase, setGeneratedSeedphrase] = useState('');
+  const [showSeedphraseModal, setShowSeedphraseModal] = useState(false);
+  const [isGeneratingSeedphrase, setIsGeneratingSeedphrase] = useState(false);
+  const [isRegeneratingSeedphrase, setIsRegeneratingSeedphrase] = useState(false);
+  const [showRegenConfirm, setShowRegenConfirm] = useState(false);
+  const [seedphraseCopied, setSeedphraseCopied] = useState(false);
+
+  // Auth method management state
+  const [showAddAuthModal, setShowAddAuthModal] = useState(false);
+  const [addAuthEmail, setAddAuthEmail] = useState('');
+  const [addAuthPassword, setAddAuthPassword] = useState('');
+  const [showAddAuthPassword, setShowAddAuthPassword] = useState(false);
+  const [isAddingAuth, setIsAddingAuth] = useState(false);
+  const [authToRemove, setAuthToRemove] = useState<string | null>(null);
+  const [isRemovingAuth, setIsRemovingAuth] = useState(false);
+
+  // Network name management state
+  const [currentNetworkName, setCurrentNetworkName] = useState('');
+  const [newNetworkName, setNewNetworkName] = useState('');
+  const [isChangingName, setIsChangingName] = useState(false);
+  const [isClaimingName, setIsClaimingName] = useState(false);
+  const [nameValidationError, setNameValidationError] = useState<string | null>(null);
+  const [nameCheckAvailable, setNameCheckAvailable] = useState<boolean | null>(null);
+  const [isCheckingName, setIsCheckingName] = useState(false);
+
   useEffect(() => {
     const loadUserEmail = async () => {
       if (!token) {
@@ -74,6 +100,9 @@ const AccountSettingsSection: React.FC = () => {
         const response = await fetchNetworkUser(token);
         if (response.network_user?.user_auth) {
           setUserEmail(response.network_user.user_auth);
+        }
+        if (response.network_user?.network_name) {
+          setCurrentNetworkName(response.network_user.network_name);
         }
       } catch (error) {
         console.error('Failed to fetch user email:', error);
@@ -309,6 +338,151 @@ const AccountSettingsSection: React.FC = () => {
     }
   };
 
+  // === Seedphrase Management Handlers ===
+
+  const handleGenerateSeedphrase = async () => {
+    if (!token) return;
+    setIsGeneratingSeedphrase(true);
+    const result = await generateSeedphrase(token);
+    setIsGeneratingSeedphrase(false);
+
+    if (result.error) {
+      toast.error(result.error.message);
+    } else if (result.seedphrase) {
+      setGeneratedSeedphrase(result.seedphrase);
+      setSeedphraseCopied(false);
+      setShowSeedphraseModal(true);
+    }
+  };
+
+  const handleRegenerateSeedphrase = async () => {
+    if (!token) return;
+    setIsRegeneratingSeedphrase(true);
+    setShowRegenConfirm(false);
+    const result = await regenerateSeedphrase(token);
+    setIsRegeneratingSeedphrase(false);
+
+    if (result.error) {
+      toast.error(result.error.message);
+    } else if (result.seedphrase) {
+      setGeneratedSeedphrase(result.seedphrase);
+      setSeedphraseCopied(false);
+      setShowSeedphraseModal(true);
+    }
+  };
+
+  const handleCopySeedphrase = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedSeedphrase);
+      setSeedphraseCopied(true);
+      toast.success('Seedphrase copied to clipboard!');
+      setTimeout(() => setSeedphraseCopied(false), 3000);
+    } catch {
+      toast.error('Failed to copy to clipboard');
+    }
+  };
+
+  // === Auth Method Management Handlers ===
+
+  const handleAddAuth = async () => {
+    if (!token) return;
+    if (!addAuthEmail.trim()) {
+      toast.error('Email is required');
+      return;
+    }
+    if (!addAuthPassword.trim()) {
+      toast.error('Password is required');
+      return;
+    }
+
+    setIsAddingAuth(true);
+    const result = await addAuth(token, {
+      user_auth: addAuthEmail.trim(),
+      password: addAuthPassword,
+    });
+    setIsAddingAuth(false);
+
+    if (result.error) {
+      toast.error(result.error.message);
+    } else {
+      toast.success('Sign-in method added successfully!');
+      setShowAddAuthModal(false);
+      setAddAuthEmail('');
+      setAddAuthPassword('');
+    }
+  };
+
+  const handleRemoveAuth = async (authType: string) => {
+    if (!token) return;
+
+    setIsRemovingAuth(true);
+    const result = await removeAuth(token, { auth_type: authType });
+    setIsRemovingAuth(false);
+    setAuthToRemove(null);
+
+    if (result.error) {
+      toast.error(result.error.message);
+    } else {
+      toast.success('Sign-in method removed');
+    }
+  };
+
+  // === Network Name Management Handlers ===
+
+  const validateNetworkName = (name: string): string | null => {
+    if (!name.trim()) return 'Network name is required';
+    if (name.trim().length < 3) return 'Network name must be at least 3 characters';
+    if (name.trim().length > 50) return 'Network name must be 50 characters or less';
+    if (!/^[a-zA-Z0-9-]+$/.test(name.trim())) return 'Only letters, numbers, and dashes allowed';
+    return null;
+  };
+
+  const handleNameChange = async () => {
+    if (!token) return;
+
+    const validationError = validateNetworkName(newNetworkName);
+    if (validationError) {
+      setNameValidationError(validationError);
+      return;
+    }
+    setNameValidationError(null);
+
+    setIsChangingName(true);
+    const result = await changeNetworkName(token, { new_name: newNetworkName.trim() });
+    setIsChangingName(false);
+
+    if (result.error) {
+      toast.error(result.error.message);
+    } else {
+      setCurrentNetworkName(result.network_name || newNetworkName.trim());
+      setNewNetworkName('');
+      toast.success('Network name updated!');
+    }
+  };
+
+  const handleNameClaim = async () => {
+    if (!token) return;
+
+    const validationError = validateNetworkName(newNetworkName);
+    if (validationError) {
+      setNameValidationError(validationError);
+      return;
+    }
+    setNameValidationError(null);
+
+    setIsClaimingName(true);
+    const result = await claimNetworkName(token, { new_name: newNetworkName.trim() });
+    setIsClaimingName(false);
+
+    if (result.error) {
+      toast.error(result.error.message);
+    } else {
+      setCurrentNetworkName(result.network_name || newNetworkName.trim());
+      setNewNetworkName('');
+      toast.success('Network name claimed!');
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 animate-staggerFadeUp" style={{ animationDelay: '0.05s' }}>
@@ -324,6 +498,430 @@ const AccountSettingsSection: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* Seedphrase Management */}
+      <div className="bg-gray-800 rounded-xl shadow-2xl overflow-hidden border border-gray-700 animate-staggerFadeUp" style={{ animationDelay: '0.08s' }}>
+        <div className="bg-gradient-to-r from-purple-600 to-violet-600 px-6 py-4 border-b border-gray-600">
+          <div className="flex items-center gap-3">
+            <FileKey size={20} className="text-white" />
+            <div>
+              <h3 className="font-medium text-white">Recovery Phrase</h3>
+              <p className="text-purple-100 text-sm mt-1">Manage your seedphrase for account recovery and sign-in</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6">
+          <p className="text-gray-300 mb-4">
+            Your seedphrase is a 24-word BIP39 mnemonic that can be used to sign in to your account.
+          </p>
+
+          <div className="space-y-3">
+            {currentNetworkName && (
+              <button
+                onClick={() => setShowRegenConfirm(true)}
+                disabled={isRegeneratingSeedphrase}
+                className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                  isRegeneratingSeedphrase
+                    ? 'bg-gray-600 cursor-not-allowed border border-gray-600 text-gray-400'
+                    : 'bg-amber-600 hover:bg-amber-700 text-white border border-amber-500 hover:shadow-lg transform hover:scale-[1.02]'
+                }`}
+              >
+                {isRegeneratingSeedphrase ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Regenerating...
+                  </>
+                ) : (
+                  <>
+                    <FileKey size={18} />
+                    Regenerate Seedphrase
+                  </>
+                )}
+              </button>
+            )}
+            {!currentNetworkName && (
+              <button
+                onClick={handleGenerateSeedphrase}
+                disabled={isGeneratingSeedphrase}
+                className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                  isGeneratingSeedphrase
+                    ? 'bg-gray-600 cursor-not-allowed border border-gray-600 text-gray-400'
+                    : 'bg-purple-600 hover:bg-purple-700 text-white border border-purple-500 hover:shadow-lg transform hover:scale-[1.02]'
+                }`}
+              >
+                {isGeneratingSeedphrase ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <FileKey size={18} />
+                    Generate Seedphrase
+                  </>
+                )}
+              </button>
+            )}
+            <p className="text-xs text-gray-400 text-center">
+              {currentNetworkName ? 'Regenerating invalidates your old seedphrase' : 'Generate a seedphrase if you created your account via email or wallet'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Network Name Management */}
+      <div className="bg-gray-800 rounded-xl shadow-2xl overflow-hidden border border-gray-700 animate-staggerFadeUp" style={{ animationDelay: '0.09s' }}>
+        <div className="bg-gradient-to-r from-sky-600 to-blue-600 px-6 py-4 border-b border-gray-600">
+          <div className="flex items-center gap-3">
+            <Edit3 size={20} className="text-white" />
+            <div>
+              <h3 className="font-medium text-white">Network Name</h3>
+              <p className="text-sky-100 text-sm mt-1">View and update your network name</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6">
+          {currentNetworkName ? (
+            <>
+              <div className="bg-gray-700/50 p-4 rounded-lg border border-gray-600 mb-4">
+                <label className="block text-xs font-medium text-gray-400 mb-1">Current Name</label>
+                <p className="text-white font-medium text-lg">{currentNetworkName}</p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1.5">New Name</label>
+                  <input
+                    type="text"
+                    value={newNetworkName}
+                    onChange={(e) => {
+                      setNewNetworkName(e.target.value);
+                      setNameValidationError(null);
+                    }}
+                    placeholder="Enter a new network name"
+                    className="w-full px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all text-sm"
+                    disabled={isChangingName}
+                  />
+                  {nameValidationError && (
+                    <p className="text-red-400 text-xs mt-1">{nameValidationError}</p>
+                  )}
+                  <p className="text-xs text-gray-400 mt-1">3-50 characters, letters, numbers, and dashes only</p>
+                </div>
+
+                <button
+                  onClick={handleNameChange}
+                  disabled={isChangingName || !newNetworkName.trim()}
+                  className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                    isChangingName || !newNetworkName.trim()
+                      ? 'bg-gray-600 cursor-not-allowed border border-gray-600 text-gray-400'
+                      : 'bg-sky-600 hover:bg-sky-700 text-white border border-sky-500 hover:shadow-lg transform hover:scale-[1.02]'
+                  }`}
+                >
+                  {isChangingName ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Edit3 size={18} />
+                      Save Name
+                    </>
+                  )}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-gray-300 mb-4">
+                Claim a unique network name for your account. This name will identify you on the network.
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1.5">Choose a Name</label>
+                  <input
+                    type="text"
+                    value={newNetworkName}
+                    onChange={(e) => {
+                      setNewNetworkName(e.target.value);
+                      setNameValidationError(null);
+                    }}
+                    placeholder="Pick a unique network name"
+                    className="w-full px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all text-sm"
+                    disabled={isClaimingName}
+                  />
+                  {nameValidationError && (
+                    <p className="text-red-400 text-xs mt-1">{nameValidationError}</p>
+                  )}
+                  <p className="text-xs text-gray-400 mt-1">3-50 characters, letters, numbers, and dashes only</p>
+                </div>
+
+                <button
+                  onClick={handleNameClaim}
+                  disabled={isClaimingName || !newNetworkName.trim()}
+                  className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                    isClaimingName || !newNetworkName.trim()
+                      ? 'bg-gray-600 cursor-not-allowed border border-gray-600 text-gray-400'
+                      : 'bg-sky-600 hover:bg-sky-700 text-white border border-sky-500 hover:shadow-lg transform hover:scale-[1.02]'
+                  }`}
+                >
+                  {isClaimingName ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Claiming...
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={18} />
+                      Claim Name
+                    </>
+                  )}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Sign-In Methods */}
+      <div className="bg-gray-800 rounded-xl shadow-2xl overflow-hidden border border-gray-700 animate-staggerFadeUp" style={{ animationDelay: '0.095s' }}>
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4 border-b border-gray-600">
+          <div className="flex items-center gap-3">
+            <Shield size={20} className="text-white" />
+            <div>
+              <h3 className="font-medium text-white">Sign-In Methods</h3>
+              <p className="text-indigo-100 text-sm mt-1">Manage how you sign in to your account</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6">
+          <div className="space-y-3 mb-6">
+            {userEmail && (
+              <div className="flex items-center justify-between bg-gray-700/50 p-3 rounded-lg border border-gray-600">
+                <div className="flex items-center gap-3">
+                  <Mail size={16} className="text-blue-400" />
+                  <div>
+                    <span className="text-white text-sm font-medium">Email / Phone</span>
+                    <p className="text-gray-400 text-xs">{userEmail}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setAuthToRemove('email')}
+                  disabled={isRemovingAuth}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs text-red-400 hover:text-red-300 hover:bg-red-900/30 transition-all border border-red-900/30 hover:border-red-500/50"
+                >
+                  <Trash2 size={12} />
+                  Remove
+                </button>
+              </div>
+            )}
+            <div className="flex items-center justify-between bg-gray-700/50 p-3 rounded-lg border border-gray-600">
+              <div className="flex items-center gap-3">
+                <KeyRound size={16} className="text-blue-400" />
+                <div>
+                  <span className="text-white text-sm font-medium">Auth Code</span>
+                  <p className="text-gray-400 text-xs">One-time authentication codes</p>
+                </div>
+              </div>
+              <span className="text-xs text-gray-500 bg-gray-600 px-2 py-0.5 rounded">Always available</span>
+            </div>
+          </div>
+
+          {authToRemove && (
+            <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-4 mb-4">
+              <p className="text-red-200 text-sm mb-3">
+                Are you sure you want to remove this sign-in method?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleRemoveAuth(authToRemove)}
+                  disabled={isRemovingAuth}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-all"
+                >
+                  {isRemovingAuth ? 'Removing...' : 'Yes, Remove'}
+                </button>
+                <button
+                  onClick={() => setAuthToRemove(null)}
+                  disabled={isRemovingAuth}
+                  className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg text-sm font-medium transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={() => setShowAddAuthModal(true)}
+            className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium transition-all duration-200 bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-500 hover:shadow-lg transform hover:scale-[1.02]"
+          >
+            <Plus size={18} />
+            Add Email Sign-In
+          </button>
+        </div>
+      </div>
+
+      {/* Add Auth Modal */}
+      {showAddAuthModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) setShowAddAuthModal(false); }}>
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div className="relative z-10 w-full max-w-md bg-gray-800 rounded-2xl shadow-2xl border border-gray-700 overflow-hidden">
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4 border-b border-gray-600">
+              <div className="flex items-center justify-between">
+                <h3 className="text-white font-medium">Add Email Sign-In</h3>
+                <button onClick={() => setShowAddAuthModal(false)} className="text-white/70 hover:text-white p-1 rounded hover:bg-white/10">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">Email or Phone</label>
+                <input
+                  type="text"
+                  value={addAuthEmail}
+                  onChange={(e) => setAddAuthEmail(e.target.value)}
+                  placeholder="Enter your email or phone number"
+                  className="w-full px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">Password</label>
+                <div className="relative">
+                  <input
+                    type={showAddAuthPassword ? 'text' : 'password'}
+                    value={addAuthPassword}
+                    onChange={(e) => setAddAuthPassword(e.target.value)}
+                    placeholder="Create a password"
+                    className="w-full px-4 py-2.5 pr-10 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAddAuthPassword(!showAddAuthPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
+                  >
+                    {showAddAuthPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+              <button
+                onClick={handleAddAuth}
+                disabled={isAddingAuth || !addAuthEmail.trim() || !addAuthPassword.trim()}
+                className={`w-full py-3 px-4 rounded-lg font-medium text-white transition-all duration-200 ${
+                  isAddingAuth || !addAuthEmail.trim() || !addAuthPassword.trim()
+                    ? 'bg-gray-600 cursor-not-allowed opacity-60'
+                    : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-indigo-500/30 active:scale-[0.98]'
+                }`}
+              >
+                {isAddingAuth ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Adding...
+                  </span>
+                ) : (
+                  'Add Sign-In Method'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Seedphrase Modal */}
+      {showSeedphraseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) setShowSeedphraseModal(false); }}>
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div className="relative z-10 w-full max-w-md bg-gray-800 rounded-2xl shadow-2xl border border-gray-700 overflow-hidden">
+            <div className="bg-gradient-to-r from-amber-600 to-yellow-600 px-6 py-4 border-b border-gray-600">
+              <div className="flex items-center justify-between">
+                <h3 className="text-white font-medium">Your Recovery Phrase</h3>
+                <button onClick={() => setShowSeedphraseModal(false)} className="text-white/70 hover:text-white p-1 rounded hover:bg-white/10">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-3">
+                <p className="text-red-300 text-xs font-medium">
+                  ⚠️ This is the ONLY time you&apos;ll see this. Copy it somewhere safe. You&apos;ll never see it again.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Seedphrase</label>
+                <textarea
+                  readOnly
+                  value={generatedSeedphrase}
+                  rows={4}
+                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white font-mono text-sm resize-none select-all"
+                />
+              </div>
+              <button
+                onClick={handleCopySeedphrase}
+                className="w-full py-3 px-4 rounded-lg font-medium text-white transition-all duration-200 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 shadow-lg hover:shadow-amber-500/30 active:scale-[0.98] flex items-center justify-center gap-2"
+              >
+                {seedphraseCopied ? (
+                  <><CheckCircle size={16} /> Copied!</>
+                ) : (
+                  <><Copy size={16} /> Copy Seedphrase</>
+                )}
+              </button>
+              <button
+                onClick={() => setShowSeedphraseModal(false)}
+                className="w-full py-2.5 px-4 rounded-lg font-medium text-gray-300 border border-gray-600 hover:bg-gray-700 hover:text-white transition-all"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Regenerate Confirmation */}
+      {showRegenConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) setShowRegenConfirm(false); }}>
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div className="relative z-10 w-full max-w-sm bg-gray-800 rounded-2xl shadow-2xl border border-gray-700 overflow-hidden p-6 space-y-4">
+            <h3 className="text-white font-medium text-lg">Regenerate Seedphrase?</h3>
+            <p className="text-gray-300 text-sm">
+              This will invalidate your old seedphrase. You will need to use the new one to sign in. Continue?
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleRegenerateSeedphrase}
+                disabled={isRegeneratingSeedphrase}
+                className="flex-1 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-medium transition-all"
+              >
+                {isRegeneratingSeedphrase ? 'Regenerating...' : 'Yes, Regenerate'}
+              </button>
+              <button
+                onClick={() => setShowRegenConfirm(false)}
+                disabled={isRegeneratingSeedphrase}
+                className="flex-1 px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg text-sm font-medium transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Authentication Token Generator */}
       <div className="bg-gray-800 rounded-xl shadow-2xl overflow-hidden border border-gray-700 animate-staggerFadeUp" style={{ animationDelay: '0.1s' }}>
