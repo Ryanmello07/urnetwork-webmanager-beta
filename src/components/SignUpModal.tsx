@@ -10,6 +10,8 @@ import {
 	Wallet,
 	X,
 	XCircle,
+	Zap,
+	Copy,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -21,8 +23,8 @@ import {
 import type { WalletAuthPayload } from "../services/types";
 import { useWalletLogin, SolanaWalletType } from "../hooks/useWalletLogin";
 
-type SignUpMethod = "email" | "wallet";
-type ModalStep = "form" | "verify" | "success";
+type SignUpMethod = "email" | "wallet" | "instant";
+type ModalStep = "form" | "verify" | "success" | "seedphrase";
 
 const PhantomLogo = () => (
 	<svg width="18" height="18" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -70,6 +72,8 @@ const SignUpModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, initialStep,
 
 	const [verifyCodeValue, setVerifyCodeValue] = useState("");
 	const [pendingUserAuth, setPendingUserAuth] = useState("");
+	const [seedphrase, setSeedphrase] = useState<string | null>(null);
+	const [instantJwt, setInstantJwt] = useState<string | null>(null);
 
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [walletLoading, setWalletLoading] = useState<SolanaWalletType | null>(null);
@@ -91,6 +95,8 @@ const SignUpModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, initialStep,
 		setNetworkChecking(false);
 		setVerifyCodeValue("");
 		setPendingUserAuth("");
+		setSeedphrase(null);
+		setInstantJwt(null);
 		setIsSubmitting(false);
 		setWalletLoading(null);
 		setError(null);
@@ -220,6 +226,53 @@ const SignUpModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, initialStep,
 		}
 	};
 
+	const handleInstantSignUp = async () => {
+		setError(null);
+
+		if (!termsAccepted) {
+			setError("You must accept the Terms of Service and Privacy Policy");
+			return;
+		}
+
+		setIsSubmitting(true);
+		const result = await createNetwork({
+			user_name: "",
+			network_name: "",
+			terms: true,
+		});
+		setIsSubmitting(false);
+
+		if (result.error?.message) {
+			setError(result.error.message);
+			return;
+		}
+
+		if (result.seedphrase) {
+			// Store both the seedphrase and jwt for the seedphrase display step
+			setSeedphrase(result.seedphrase);
+			if (result.network?.by_jwt) {
+				setInstantJwt(result.network.by_jwt);
+			}
+			setStep("seedphrase");
+		} else if (result.network?.by_jwt) {
+			setStep("success");
+			setTimeout(() => {
+				onSuccess(result.network!.by_jwt);
+				onClose();
+			}, 1500);
+		}
+	};
+
+	const handleCopySeedphrase = () => {
+		if (seedphrase) {
+			navigator.clipboard.writeText(seedphrase).then(() => {
+				toast.success("Seedphrase copied to clipboard");
+			}).catch(() => {
+				toast.error("Failed to copy. Please copy manually.");
+			});
+		}
+	};
+
 	const handleVerify = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setError(null);
@@ -286,7 +339,7 @@ const SignUpModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, initialStep,
 							<div>
 								<h2 className="text-white text-lg font-bold leading-tight">Create Account</h2>
 								<p className="text-teal-100 text-xs">
-									{step === "verify" ? "Verify your identity" : step === "success" ? "Account created!" : "Join URnetwork today"}
+									{step === "verify" ? "Verify your identity" : step === "success" ? "Account created!" : step === "seedphrase" ? "Save your seedphrase" : "Join URnetwork today"}
 								</p>
 							</div>
 						</div>
@@ -307,6 +360,54 @@ const SignUpModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, initialStep,
 							</div>
 							<h3 className="text-white text-lg font-semibold mb-1">Welcome to URnetwork!</h3>
 							<p className="text-gray-400 text-sm text-center">Your account has been created. Logging you in...</p>
+						</div>
+					)}
+
+					{step === "seedphrase" && seedphrase && (
+						<div className="space-y-4">
+							<div className="bg-yellow-900/20 border border-yellow-500/40 rounded-lg p-3">
+								<p className="text-yellow-300 text-xs font-medium">
+									⚠️ This is the ONLY time you&apos;ll see this. Copy it somewhere safe. You&apos;ll need it to sign in.
+								</p>
+							</div>
+
+							<div>
+								<label className="block text-sm font-medium text-gray-300 mb-2">
+									Your Seedphrase
+								</label>
+								<textarea
+									readOnly
+									value={seedphrase}
+									rows={4}
+									className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white font-mono text-sm resize-none select-all"
+								/>
+							</div>
+
+							<p className="text-gray-400 text-sm">
+								Your account has been created! Save your seedphrase — you&apos;ll need it to sign in.
+							</p>
+
+							<button
+								type="button"
+								onClick={handleCopySeedphrase}
+								className="w-full py-2.5 px-4 rounded-lg font-medium text-white transition-all duration-200 bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 shadow-lg hover:shadow-teal-500/30 active:scale-[0.98] flex items-center justify-center gap-2"
+							>
+								<Copy size={16} />
+								Copy Seedphrase
+							</button>
+
+							<button
+								type="button"
+								onClick={() => {
+									if (instantJwt) {
+										onSuccess(instantJwt);
+									}
+									onClose();
+								}}
+								className="w-full py-2.5 px-4 rounded-lg font-medium text-gray-300 border border-gray-600 hover:bg-gray-700 hover:text-white transition-all duration-200 active:scale-[0.98]"
+							>
+								Continue
+							</button>
 						</div>
 					)}
 
@@ -397,9 +498,22 @@ const SignUpModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, initialStep,
 									<Wallet size={14} />
 									Wallet
 								</button>
+								<button
+									type="button"
+									onClick={() => { setMethod("instant"); setError(null); }}
+									className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 flex items-center justify-center gap-1.5 ${
+										method === "instant"
+											? "bg-teal-600 text-white shadow-md"
+											: "text-gray-300 hover:text-white hover:bg-gray-600"
+									}`}
+								>
+									<Zap size={14} />
+									Instant
+								</button>
 							</div>
 
 							<div className="space-y-4">
+								{method !== "instant" && (
 								<div>
 									<label className="block text-sm font-medium text-gray-300 mb-1.5">Network Name</label>
 									<div className="relative">
@@ -427,6 +541,7 @@ const SignUpModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, initialStep,
 										<p className="text-green-400 text-xs mt-1">Network name is available</p>
 									)}
 								</div>
+								)}
 
 								{method === "email" && (
 									<form onSubmit={handleEmailSubmit} className="space-y-4">
@@ -628,9 +743,70 @@ const SignUpModal: React.FC<Props> = ({ isOpen, onClose, onSuccess, initialStep,
 													No Solana wallet detected. Install Phantom or Solflare to continue.
 												</p>
 											)}
-										</div>
-									</>
-								)}
+											</div>
+											</>
+											)}
+
+											{method === "instant" && (
+											<>
+											<label className="flex items-start gap-3 cursor-pointer group">
+												<input
+													type="checkbox"
+													checked={termsAccepted}
+													onChange={(e) => setTermsAccepted(e.target.checked)}
+													className="mt-0.5 accent-teal-500 w-4 h-4 flex-shrink-0"
+												/>
+												<span className="text-xs text-gray-400 leading-relaxed">
+													I agree to the{" "}
+													<a
+														href="https://ur.io/terms"
+														target="_blank"
+														rel="noopener noreferrer"
+														className="text-teal-400 hover:text-teal-300 underline"
+														onClick={(e) => e.stopPropagation()}
+													>
+														Terms of Service
+													</a>{" "}
+													and{" "}
+													<a
+														href="https://ur.io/privacy"
+														target="_blank"
+														rel="noopener noreferrer"
+														className="text-teal-400 hover:text-teal-300 underline"
+														onClick={(e) => e.stopPropagation()}
+													>
+														Privacy Policy
+													</a>
+												</span>
+											</label>
+
+											{error && (
+												<div className="text-red-400 text-sm py-2.5 px-4 bg-red-900/20 border border-red-500/30 rounded-lg">
+													{error}
+												</div>
+											)}
+
+											<button
+												type="button"
+												onClick={handleInstantSignUp}
+												disabled={isSubmitting}
+												className={`w-full py-3 px-4 rounded-lg font-medium text-white transition-all duration-200 ${
+													isSubmitting
+														? "bg-gray-600 cursor-not-allowed opacity-60"
+														: "bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 shadow-lg hover:shadow-teal-500/30 active:scale-[0.98]"
+												}`}
+											>
+												{isSubmitting ? (
+													<span className="flex items-center justify-center gap-2">
+														<Loader2 size={16} className="animate-spin" />
+														Creating Instant Account...
+													</span>
+												) : (
+													"Create Instant Account"
+												)}
+											</button>
+											</>
+											)}
 							</div>
 						</>
 					)}

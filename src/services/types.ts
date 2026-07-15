@@ -768,12 +768,30 @@ export interface NetworkCreateRequest {
   wallet_auth?: WalletAuthPayload;
 }
 
+/**
+ * Response from seedphrase-based login
+ * Contains network details with JWT on success or an error message
+ */
+export interface SeedphraseLoginResponse {
+  network?: {
+    by_jwt: string;
+    network_id?: string;
+    network_name?: string;
+    is_pro?: boolean;
+  };
+  error?: {
+    message: string;
+  };
+}
+
 export interface NetworkCreateResponse {
   network?: {
     by_jwt: string;
     network_id: string;
     network_name: string;
   };
+  /** 24-word seedphrase returned for instant sign-up (no email/wallet) */
+  seedphrase?: string;
   verification_required?: {
     user_auth: string;
   };

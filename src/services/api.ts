@@ -50,6 +50,7 @@ import type {
   GetApiKeysResult,
   DeleteApiKeyResult,
   ApiKeyMetadata,
+  SeedphraseLoginResponse,
 } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE ?? "http://74.50.11.113:8080";
@@ -216,6 +217,47 @@ export const loginWithWallet = async (
       error: {
         message:
           error instanceof Error ? error.message : "Wallet authentication failed",
+      },
+    };
+  }
+};
+
+/**
+ * Seedphrase-based login using BIP39 mnemonic
+ * @param seedphrase - The 24-word BIP39 mnemonic to authenticate with
+ * @returns SeedphraseLoginResponse with network JWT or error
+ */
+export const loginWithSeedphrase = async (
+  seedphrase: string
+): Promise<SeedphraseLoginResponse> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ seedphrase }),
+    });
+
+    if (!response.ok) {
+      console.error(
+        "Seedphrase login failed:",
+        response.status,
+        response.statusText
+      );
+      const errorData = await response.text();
+      console.error("Error response:", errorData);
+
+      return {
+        error: { message: `HTTP error! status: ${response.status}` },
+      };
+    }
+
+    return await safeJsonParse<SeedphraseLoginResponse>(response);
+  } catch (error) {
+    console.error("Seedphrase login error:", error);
+    return {
+      error: {
+        message:
+          error instanceof Error ? error.message : "Seedphrase authentication failed",
       },
     };
   }
@@ -1471,6 +1513,7 @@ export type {
   WalletAuthChallengeRequest,
   WalletAuthChallengeResponse,
   WalletLoginResponse,
+  SeedphraseLoginResponse,
   NetworkCreateRequest,
   NetworkCreateResponse,
   NetworkCheckResponse,
