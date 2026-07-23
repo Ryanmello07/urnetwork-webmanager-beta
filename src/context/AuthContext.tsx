@@ -142,24 +142,13 @@ export const AuthContextProvider: FC<PropsWithChildren> = ({ children }) => {
 	const loginWithSeedphrase = async (
 		seedphrase: string,
 	): Promise<SeedphraseLoginResponse | null> => {
-		// Normalize the seedphrase
-		const normalizedSeedphrase = seedphrase
-			.toLowerCase()
-			.trim()
-			.replace(/\s+/g, ' ');
-
-		if (!normalizedSeedphrase) {
-			toast.error("Please enter your seedphrase");
-			return null;
-		}
-
 		setIsLoading(true);
-		const response = await apiLoginWithSeedphrase(normalizedSeedphrase);
+		const response = await apiLoginWithSeedphrase(seedphrase);
 		setIsLoading(false);
 
 		if (response.error || !response.network?.by_jwt) {
 			toast.error(
-				response.error?.message || "Invalid seedphrase. Please check and try again.",
+				`Login failed: ${response.error?.message || "Invalid response received"}`,
 			);
 			return null;
 		}

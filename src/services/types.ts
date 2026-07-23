@@ -392,6 +392,81 @@ export interface NetworkUser {
   auth_type: string;
   /** Name of the network user belongs to */
   network_name: string;
+  /** All auth methods bound to this account: "email" | "phone" | "apple" | "google" | "solana" | "seedphrase" */
+  auth_types?: string[];
+  /** Metadata for bound seedphrase auths (the phrase itself is never returned) */
+  seedphrase_auths?: { create_time: string }[];
+}
+
+/**
+ * Response from seed-phrase login (POST /auth/login with seedphrase field)
+ */
+export interface SeedphraseLoginResponse {
+  /** Present on successful login */
+  network?: { by_jwt: string };
+  error?: { message: string };
+}
+
+/**
+ * Response from instant network creation (POST /auth/network-create, no auth fields)
+ */
+export interface InstantNetworkCreateResponse {
+  /** The generated BIP39 seed phrase — shown once, never retrievable again */
+  seedphrase?: string;
+  network?: {
+    by_jwt?: string;
+    network_id?: string;
+    /** Server-assigned random network name */
+    network_name?: string;
+    is_pro?: boolean;
+  };
+  error?: { message: string };
+}
+
+/**
+ * Response from generate/regenerate seedphrase endpoints
+ */
+export interface SeedphraseResponse {
+  seedphrase?: string;
+  error?: { message: string };
+}
+
+/**
+ * Request to add an auth method to the current account (POST /auth/add-auth).
+ * Exactly one mode: password (user_auth+password), SSO (auth_jwt+auth_jwt_type),
+ * or wallet (wallet_auth).
+ */
+export interface AddAuthMethodRequest {
+  user_auth?: string;
+  password?: string;
+  auth_jwt?: string;
+  auth_jwt_type?: string;
+  wallet_auth?: WalletAuthPayload;
+}
+
+/** Response from add-auth / remove-auth — empty object on success */
+export interface AuthMethodMutationResponse {
+  error?: { message: string };
+}
+
+/**
+ * Response from change-name / claim-name endpoints
+ */
+export interface NetworkNameChangeResponse {
+  network_name?: string;
+  error?: { message: string };
+}
+
+/**
+ * Response from bulk client removal (POST /network/remove-clients).
+ * Empty object = applied synchronously (<=10k ids). scheduled = queued as a
+ * background task (>10k ids). already_in_progress = a bulk run for this
+ * network is active; retry later.
+ */
+export interface RemoveClientsResponse {
+  scheduled?: boolean;
+  already_in_progress?: boolean;
+  error?: { message: string };
 }
 
 /**
@@ -768,30 +843,12 @@ export interface NetworkCreateRequest {
   wallet_auth?: WalletAuthPayload;
 }
 
-/**
- * Response from seedphrase-based login
- * Contains network details with JWT on success or an error message
- */
-export interface SeedphraseLoginResponse {
-  network?: {
-    by_jwt: string;
-    network_id?: string;
-    network_name?: string;
-    is_pro?: boolean;
-  };
-  error?: {
-    message: string;
-  };
-}
-
 export interface NetworkCreateResponse {
   network?: {
     by_jwt: string;
     network_id: string;
     network_name: string;
   };
-  /** 24-word seedphrase returned for instant sign-up (no email/wallet) */
-  seedphrase?: string;
   verification_required?: {
     user_auth: string;
   };
@@ -820,64 +877,6 @@ export interface VerifyResponse {
   error?: {
     message: string;
   };
-}
-
-/** Response from generating a new seedphrase */
-export interface GenerateSeedphraseResponse {
-  seedphrase?: string;
-  error?: { message: string };
-}
-
-/** Response from regenerating an existing seedphrase */
-export interface RegenerateSeedphraseResponse {
-  seedphrase?: string;
-  error?: { message: string };
-}
-
-/** Request payload for adding an auth method */
-export interface AddAuthRequest {
-  user_auth?: string;
-  password?: string;
-  auth_jwt?: string;
-  auth_jwt_type?: string;
-  wallet_auth?: WalletAuthPayload;
-}
-
-/** Response from adding an auth method */
-export interface AddAuthResponse {
-  error?: { message: string };
-}
-
-/** Request payload for removing an auth method */
-export interface RemoveAuthRequest {
-  auth_type: string;
-}
-
-/** Response from removing an auth method */
-export interface RemoveAuthResponse {
-  error?: { message: string };
-}
-
-/** Request payload for changing the network name */
-export interface ChangeNameRequest {
-  new_name: string;
-}
-
-/** Response from changing the network name */
-export interface ChangeNameResponse {
-  network_name?: string;
-  error?: { message: string };
-}
-
-/** Request payload for claiming a network name */
-export interface ClaimNameRequest {
-  new_name: string;
-}
-
-/** Response from claiming a network name */
-export interface ClaimNameResponse {
-  network_name?: string;
-  error?: { message: string };
 }
 
 export interface CreateApiKeyArgs {
